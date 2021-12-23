@@ -23,42 +23,48 @@ class Balance_endpoint(Resource):
         transactions = server.accounts().account_id(address).call()
         newbal = transactions['balances']
         asset = newbal
-        total_bal = {}
+        total_bal_of_asset_in_wallet = {}
         for i in range(len(asset)):
             if float(asset[i]['balance']) != 0.00:
                 try:
                     from_code = asset[i]['asset_code']
                     from_bal = asset[i]['balance']
-                    total_bal[from_code] = from_bal
+                    total_bal_of_asset_in_wallet[from_code] = from_bal
                 except KeyError:
                     from_code = 'XLM'
                     from_bal = asset[i]['balance']
-                    total_bal[from_code] = from_bal
+                    total_bal_of_asset_in_wallet[from_code] = from_bal
 
-        url = f"https://horizon.stellar.org/paths/strict-receive?source_account={address}&destination_asset_type=credit_alphanum4&destination_asset_issuer=GDUKMGUGDZQK6YHYA5Z6AY2G4XDSZPSZ3SW5UN3ARVMO6QSRDWP5YLEX&destination_asset_code=USD&destination_amount=0.05"
+        url = f"https://horizon.stellar.org/paths/strict-receive?source_account={address}&destination_asset_type=credit_alphanum4&destination_asset_issuer=GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN&destination_asset_code=USDC&destination_amount=0.05"
         a = requests.get(url)
-        b = a.json()
+        if a.status_code == 500:
+            return float(0.00)
+        else:
+            b = a.json()    
 
+            unit_price = {}
+            for i in range(len(b['_embedded']['records'])):
+                try:
+                    code = b['_embedded']['records'][i]['source_asset_code']
+                    amount = b['_embedded']['records'][i]['source_amount']
+                
+                    unit_price[code]= amount
+                except Exception as e:
+                    code = 'XLM'
+                    amount = b['_embedded']['records'][i]['source_amount']
+                    unit_price[code]= amount
+            
+            final = []
+            for key, value in unit_price.items():
+                if key in total_bal_of_asset_in_wallet:
 
-        unit_price = {}
-        for i in range(len(b['_embedded']['records'])):
-            try:
-                code = b['_embedded']['records'][i]['source_asset_code']
-                amount = b['_embedded']['records'][i]['source_amount']
-                unit_price[code]= amount
-            except Exception as e:
-                code = 'XLM'
-                amount = b['_embedded']['records'][i]['source_amount']
-                unit_price[code]= amount
+                    main_usd = float(total_bal_of_asset_in_wallet[key]) / float(value)
+                    indi_bal = main_usd * 0.05
+                    final.append(indi_bal)
 
-        final = []
-        
-        for key, value in unit_price.items():
-            if key in total_bal:
-                main_usd = float(total_bal[key]) / float(value)
-                indi_bal = main_usd * 0.05
-                final.append(indi_bal)
-        return sum(final)
+            plus_usdc = sum(final) + float(total_bal_of_asset_in_wallet["USDC"])
+
+            return plus_usdc
 
 
 api.add_resource(Balance_endpoint, '/api/v1/balance')
